@@ -170,7 +170,8 @@ function generateBaseline(data) {
     for (const [chName, bms] of Object.entries(byChapter)) {
       lines.push(`### ${chName}`, '');
       for (const bm of bms) {
-        lines.push(`> ${bm.markText || ''}`);
+        const text = (bm.markText || '').replace(/\n/g, '\n> ');
+        lines.push(`> ${text}`);
         if (bm.createTime) lines.push(`> <sub>— ${fmtDate(bm.createTime)}</sub>`);
         lines.push('');
       }
