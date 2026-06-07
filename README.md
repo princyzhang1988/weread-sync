@@ -5,7 +5,7 @@
 ## 安装
 
 ```bash
-npx skills add <your-github-username>/weread-sync -g
+npx skills add princyzhang1988/weread-sync -g
 ```
 
 ## 前置条件
