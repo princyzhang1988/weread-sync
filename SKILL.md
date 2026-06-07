@@ -1,7 +1,7 @@
 ---
 name: weread-sync
 description: 微信读书数据同步到 Obsidian，生成每日读书小结。支持手动触发和定时自动执行。
-version: 0.1.0
+version: 0.2.0
 ---
 
 # weread-sync — 微信读书同步
@@ -47,7 +47,20 @@ SKILL_DIR = 本 skill 的安装目录
    > 在微信读书 App → 设置 → 技能管理 中申请。
 2. 确认 Obsidian vault 路径可访问。
 
-### 第 1 步：查询上次同步时间
+### 第 1 步：检测是否需要初始化
+
+1. 检查 `{VAULT_ROOT}/知识库/20.Areas/阅读/books/` 下是否存在任何 `weread/baseline.md` 文件
+2. **如果没有任何基线文件**（首次使用）：
+   ```
+   🆕 检测到你是第一次使用 weread-sync。
+   需要先拉取全部微信读书数据并建立基线，预计需 3-5 分钟。
+   
+   是否开始初始化？
+   ```
+   用户确认后，执行**附录 A：首次全量初始化**，完成后结束。
+3. **如果已有基线文件**：继续第 2 步。
+
+### 第 2 步：查询上次同步时间
 
 1. 扫描 `{VAULT_ROOT}/知识库/20.Areas/阅读/books/` 下所有子目录
 2. 对每个包含 `weread/baseline.md` 的书，读取其 frontmatter 中的 `lastSync` 字段
@@ -64,7 +77,7 @@ SKILL_DIR = 本 skill 的安装目录
 
 4. 如果是 `--since` 模式，跳过确认，直接执行。
 
-### 第 2 步：拉取微信读书最新数据
+### 第 3 步：拉取微信读书最新数据
 
 使用 weread-skills 的 API 接口，按以下顺序拉取：
 
@@ -85,7 +98,7 @@ API 调用规范（来自 weread-skills）：
 - Body 参数平铺在顶层，包含 `api_name` 和 `skill_version: "1.0.3"`
 - 每次请求必须带 `skill_version`
 
-### 第 3 步：计算 Diff
+### 第 4 步：计算 Diff
 
 对每本已有基线且拉取了新数据的书：
 
@@ -93,7 +106,7 @@ API 调用规范（来自 weread-skills）：
 2. 用 `node {SKILL_DIR}/scripts/diff.mjs /tmp/weread-sync/<bookId>-baseline.json /tmp/weread-sync/<bookId>.json` 计算 diff
 3. 收集所有书的 DiffResult
 
-### 第 4 步：生成每日小结
+### 第 5 步：生成每日小结
 
 1. 读取 `{SKILL_DIR}/templates/daily-summary.md`、`fiction.md`、`non-fiction.md`
 2. 将所有有变化的书的 DiffResult 汇总，替换 daily-summary.md 中的 `[DIFF_JSON_PLACEHOLDER]`
@@ -101,7 +114,7 @@ API 调用规范（来自 weread-skills）：
 4. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
 
-### 第 5 步：更新基线文件
+### 第 6 步：更新基线文件
 
 对每本有变化的书：
 
@@ -111,7 +124,7 @@ API 调用规范（来自 weread-skills）：
    ```
 2. 如果书的 `weread/` 目录不存在，先创建
 
-### 第 6 步：报告结果
+### 第 7 步：报告结果
 
 向用户展示同步结果摘要：
 
@@ -137,3 +150,40 @@ API 调用规范（来自 weread-skills）：
 生成小结时附上文件路径，方便用户点击跳转：
 - 小结文件：`知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
 - 基线文件：`知识库/20.Areas/阅读/books/<书名>/weread/baseline.md`
+
+---
+
+## 附录 A：首次全量初始化
+
+首次使用时，将微信读书全部书籍数据拉取并建立基线文件。此流程由第 1 步自动触发，也可以手动执行：
+
+```
+/weread-sync --init
+```
+
+### A.1 执行初始化
+
+使用 `bulk-first-sync.mjs` 脚本批量同步全部书籍：
+
+```bash
+node {SKILL_DIR}/scripts/bulk-first-sync.mjs
+```
+
+脚本会：
+1. 调用 `/shelf/sync` 获取全部书籍（含已读完）
+2. 对每本书并行拉取元信息、进度、章节目录、划线、想法
+3. 为每本书生成 `baseline.md`（人类可读区 + 机器可读 JSON）
+4. 写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/books/<书名>/weread/baseline.md`
+
+预计耗时：3-5 分钟（取决于书架大小，约 1 秒/本）。
+
+### A.2 初始化完成后
+
+初始化只建基线，不生成每日小结。完成后告知用户：
+
+```
+✅ 初始化完成：已为 N 本书建立基线。
+📁 路径：知识库/20.Areas/阅读/books/
+
+从下次同步开始，将自动识别新增的划线和进度变化，生成每日读书小结。
+```
