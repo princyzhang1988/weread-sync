@@ -200,10 +200,13 @@ function generateBaseline(data) {
 
   // ═══ 机器可读区 ═══
   lines.push('## 🤖 同步基线（机器可读）', '');
-  lines.push('<details><summary>展开</summary>', '');
+  lines.push('<details>');
+  lines.push('<summary>展开</summary>');
+  lines.push('');
   lines.push('```json');
   lines.push(JSON.stringify(data, null, 2));
   lines.push('```');
+  lines.push('');
   lines.push('</details>');
 
   return lines.join('\n');
