@@ -110,8 +110,10 @@ API 调用规范（来自 weread-skills）：
 
 1. 读取 `{SKILL_DIR}/templates/daily-summary.md`、`fiction.md`、`non-fiction.md`
 2. 将所有有变化的书的 DiffResult 汇总，替换 daily-summary.md 中的 `[DIFF_JSON_PLACEHOLDER]`
-3. 按模板要求生成完整小结 markdown
-4. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
+3. **检测章节边界**：对每本有变化的书，检查 `chapterChange.from.chapterUid` 和 `chapterChange.to.chapterUid`。如果不同，说明跨过了章节边界 → 生成「📌 章节回顾」和「🔜 下章概要」
+4. **检测阅读阶段**：根据 `progressChange.to` 判断阶段（0-5% 开卷 / 5-30% 渐入 / 30-70% 沉浸 / 70-99% 收束 / 100% 读完），按对应阶段选择掩卷之后的问题侧重
+5. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则
+6. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
 
 ### 第 6 步：更新基线文件
@@ -145,7 +147,7 @@ API 调用规范（来自 weread-skills）：
 ```
 📝 小结已写入 Obsidian。
 
-今天《少年》新增了两条划线和一条你的想法——关于"陀氏笔下男主人公总是轻易爱上女人"这个观察，如果你想展开聊聊，或者对掩卷之后的任何一个问题有兴趣，我们可以随时深读下去。
+今天《少年》多了两条划线和一条你的想法。想聊聊"陀氏笔下的男人总是轻易爱上女人"这个观察吗？
 ```
 
 交互原则：
