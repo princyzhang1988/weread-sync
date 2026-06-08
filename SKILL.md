@@ -112,10 +112,11 @@ API 调用规范（来自 weread-skills）：
 
 1. 读取 `{SKILL_DIR}/templates/daily-summary.md`、`fiction.md`、`non-fiction.md`
 2. 将所有有变化的书的 DiffResult 汇总，替换 daily-summary.md 中的 `[DIFF_JSON_PLACEHOLDER]`
-3. **检测章节边界**：对每本有变化的书，检查 `chapterChange.from.chapterUid` 和 `chapterChange.to.chapterUid`。如果不同，说明跨过了章节边界 → 生成「📌 章节回顾」和「🔜 下章概要」
-4. **检测阅读阶段**：根据 `progressChange.to` 判断阶段（0-5% 开卷 / 5-30% 渐入 / 30-70% 沉浸 / 70-99% 收束 / 100% 读完），按对应阶段选择掩卷之后的问题侧重
-5. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则
-6. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
+3. **检测章节边界**：对每本有变化的书，检查 `chapterChange.from.chapterUid` 和 `chapterChange.to.chapterUid`。如果不同，说明跨过了章节边界 → 生成「📌 章节回顾」
+4. **检测内容边界**：分析新增划线/想法的内容，判断是否出现场景收束、论证段落结束、章节分水岭等自然边界 → 有则生成「🔜 翻页之前」
+5. **检测阅读阶段**：根据 `progressChange.to` 判断阶段（0-5% 开卷 / 5-30% 渐入 / 30-70% 沉浸 / 70-99% 收束 / 100% 读完），按对应阶段选择掩卷之后的问题侧重
+6. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
+7. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
 
 ### 第 6 步：Insight 沉淀
@@ -172,21 +173,9 @@ updated: YYYY-MM-DD
 - **更新已有条目**：重写对应行的摘要以反映条目当前全貌（不续写，覆盖整行）
 - 如果该分类段落尚不存在 → 新增分节标题
 
-#### 6.4 在小结中留下反链
+#### 6.4 无候选时
 
-在小结文件的掩卷之后末尾，追加一段 HTML 注释形式的反链：
-
-```markdown
-<!-- insight 沉淀：YYYY-MM-DD
-- [[维度/条目slug]]
--->
-```
-
-这些是 HTML 注释，Obsidian 渲染时不可见，但链接能被 Obsidian 的反链系统识别。如果本次无 insight 产出，不追加注释。
-
-#### 6.5 无候选时
-
-不在小结文件中追加注释，不在 INDEX 中新增条目。正常进入下一步。
+不在 INDEX 中新增条目。正常进入下一步。
 
 ### 第 7 步：更新基线文件
 
