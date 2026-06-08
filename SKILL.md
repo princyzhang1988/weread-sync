@@ -259,13 +259,24 @@ node {SKILL_DIR}/scripts/bulk-first-sync.mjs
 
 预计耗时：3-5 分钟（取决于书架大小，约 1 秒/本）。
 
-### A.2 初始化完成后
+### A.2 生成初见笔记
 
-初始化只建基线，不生成每日小结。完成后告知用户：
+初始化完成后，取最近在读的一本书（按 `readUpdateTime` 降序，取第一本 `finishReading !== 1` 的书），自动生成一份「初见」笔记，让读者立刻看到手帐效果（AHA moment）。
+
+1. 读取 `{SKILL_DIR}/templates/first-sync.md`
+2. 将该书的 BookData JSON 替换模板中的 `[BOOK_DATA_PLACEHOLDER]`
+3. 按模板要求生成初见笔记 markdown
+4. 写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`（文件名用当天日期，与日常小结格式一致）
+   - 如果该文件已存在 → 追加在已有内容之后，用 `---` 分隔符分隔
+
+### A.3 初始化完成后
+
+告知用户：
 
 ```
 ✅ 初始化完成：已为 N 本书建立基线。
-📁 路径：知识库/20.Areas/阅读/books/
+📝 已生成初见笔记：知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md
+📁 基线路径：知识库/20.Areas/阅读/books/
 
 从下次同步开始，将自动识别新增的划线和进度变化，生成每日读书小结。
 ```
