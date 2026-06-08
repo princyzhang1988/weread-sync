@@ -87,9 +87,11 @@ SKILL_DIR = 本 skill 的安装目录
    - `/book/info` (bookId) → 元信息（translator, publisher, publishTime, isbn, wordCount, rating, intro）
    - `/book/getprogress` (bookId) → 当前进度（progress, chapterUid, chapterOffset, totalReadTime, finishTime）
    - `/book/chapterinfo` (bookId) → 章节目录
-   - `/book/bookmarklist` (bookId) → 全部划线（含 markText, createTime, chapterUid, range, colorStyle）
-   - `/review/list/mine` (bookid) → 全部个人想法（含 content, createTime, chapterUid）
+   - `/book/bookmarklist` (bookId) → 全部划线（含 bookmarkId, markText, createTime, chapterUid, range, colorStyle）
+   - `/review/list/mine` (bookid) → 全部个人想法（含 reviewId, content, createTime, chapterUid）
+     - **注意**：`/review/list/mine` 返回 `reviews[].review.reviewId`（嵌套在 `review` 对象内），组装 BookData 时必须提取到顶层，保留 `reviewId` 字段
 4. **对每本书组装 BookData JSON**，写入临时文件 `/tmp/weread-sync/<bookId>.json`
+   - **关键字段**：每条 bookmark 必须保留 `bookmarkId`，每条 review 必须保留 `reviewId`——这是 diff 比对的唯一标识，丢失会导致所有旧笔记被误判为新增
 5. **如果某本书没有基线文件**：这是新书，直接用当前数据生成基线（调 baseline.mjs generate），不参与 diff
 
 API 调用规范（来自 weread-skills）：
@@ -116,7 +118,82 @@ API 调用规范（来自 weread-skills）：
 6. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
 
-### 第 6 步：更新基线文件
+### 第 6 步：Insight 沉淀
+
+每日小结写完后，检查小结中产出的 insight 候选，将其沉淀到 vault 的 `insight/` 体系，与对话式深读系统打通。
+
+#### 6.1 识别候选
+
+回顾刚生成的小结，按模板中「内部标注」的指引，识别 insight 候选。按 vault CLAUDE.md 陪读原则中的分类标准判断：
+
+| 类型 | 来源 | 判断标准 |
+|------|------|----------|
+| 悬题 | 掩卷之后的 📌 悬而未决、标记为深层认知类的 🤔 问题 | 当下无法给完整答案的深层问题，值得带着继续读 |
+| 概念 | 拾贝中展开解读的核心术语 | 有独立记录价值，后续可能跨书复用 |
+| 延伸 | 掩卷之后的 🪢 关联记忆（关联其他书/作品） | 从书岔出去的外部视野 |
+| 闪回 | 掩卷之后的 🪢 关联记忆（关联生活经历） | 书的内容照见了生活经历 |
+| 共振 | 掩卷之后的 🤔 感受类问题 | 明显的情绪共鸣时刻 |
+
+**若无合适候选，跳过本步骤。**
+
+#### 6.2 写入 insight 文件
+
+对每条候选，按 vault CLAUDE.md 规范写入文件。
+
+**路径**：`{VAULT_ROOT}/insight/{维度}/{条目slug}.md`
+
+**文件模板**：
+```markdown
+---
+title: <主题标题>
+tags: [<书名>, <相关标签>]
+updated: YYYY-MM-DD
+---
+
+<问题/概念/关联的完整表述，2-4句话>
+
+**来源**：[[知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD|YYYY-MM-DD 读书小结]] · 《书名》
+
+---
+
+## 演化
+- YYYY-MM-DD：初次记录，来自每日读书小结
+```
+
+**slug 规则**：
+- 悬题：`<书名简称>-<问题关键词>`，如 `少年-思想与自述的关系`
+- 概念：`<概念名>`
+- 延伸/闪回/共振：`<主题slug>`
+
+**写入前检查**：
+- 如果目标文件已存在 → 读取现有内容，追加到「演化」段而非覆盖正文
+- 如果文件名冲突但指向不同内容 → 用更具体的 slug 区分
+
+#### 6.3 更新 INDEX.md
+
+读取 `{VAULT_ROOT}/insight/INDEX.md`，对每条新增/更新的条目：
+
+- **新增条目**：在对应分类段落下添加 `- [[维度/条目slug]] — 一行摘要`
+- **更新已有条目**：重写对应行的摘要以反映条目当前全貌（不续写，覆盖整行）
+- 如果该分类段落尚不存在 → 新增分节标题
+
+#### 6.4 在小结中留下反链
+
+在小结文件的掩卷之后末尾，追加一段 HTML 注释形式的反链：
+
+```markdown
+<!-- insight 沉淀：YYYY-MM-DD
+- [[维度/条目slug]]
+-->
+```
+
+这些是 HTML 注释，Obsidian 渲染时不可见，但链接能被 Obsidian 的反链系统识别。如果本次无 insight 产出，不追加注释。
+
+#### 6.5 无候选时
+
+不在小结文件中追加注释，不在 INDEX 中新增条目。正常进入下一步。
+
+### 第 7 步：更新基线文件
 
 对每本有变化的书：
 
@@ -126,7 +203,7 @@ API 调用规范（来自 weread-skills）：
    ```
 2. 如果书的 `weread/` 目录不存在，先创建
 
-### 第 7 步：报告结果
+### 第 8 步：报告结果
 
 向用户展示同步结果摘要：
 
@@ -136,11 +213,13 @@ API 调用规范（来自 weread-skills）：
 《少年》：进度 8% → 12%（+4%），新增 3 条划线，1 条想法
 《系统思考》：进度 18% → 22%（+4%），新增 5 条划线
 📝 小结已写入：知识库/20.Areas/阅读/读书笔记/2026-06-07.md
+💡 已沉淀 2 条 insight：悬题「少年-思想与自述的关系」、概念「不成熟叙事者」
 ```
 
 如果当日无任何阅读变化，告知用户"今日无新增阅读活动"，不生成空白小结。
+如果本次无 insight 产出，省略"💡 已沉淀…"行。
 
-### 第 8 步：交互引导
+### 第 9 步：交互引导
 
 小结写入 Obsidian 后，不要就此结束。以读书伙伴的身份主动邀请用户深入对话：
 

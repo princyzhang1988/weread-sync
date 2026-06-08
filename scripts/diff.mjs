@@ -3,6 +3,28 @@
 import { readFileSync } from 'fs';
 
 /**
+ * 生成 bookmark 的匹配键。
+ * 优先用 bookmarkId；缺失时 fallback 到 createTime + markText。
+ */
+function bookmarkIdKey(b) {
+  return b.bookmarkId != null ? String(b.bookmarkId) : null;
+}
+function bookmarkFallbackKey(b) {
+  return `${b.createTime || 0}::${(b.markText || '').slice(0, 80)}`;
+}
+
+/**
+ * 生成 review 的匹配键。
+ * 优先用 reviewId；缺失时 fallback 到 createTime + content。
+ */
+function reviewIdKey(r) {
+  return r.reviewId != null ? String(r.reviewId) : null;
+}
+function reviewFallbackKey(r) {
+  return `${r.createTime || 0}::${(r.content || '').slice(0, 80)}`;
+}
+
+/**
  * 对比基线和当前数据，输出 DiffResult
  */
 function computeDiff(baseline, current) {
@@ -11,11 +33,37 @@ function computeDiff(baseline, current) {
   const baselineReviews = baseline.reviews || [];
   const currentReviews = current.reviews || [];
 
-  const baselineBookmarkIds = new Set(baselineBookmarks.map(b => b.bookmarkId));
-  const baselineReviewIds = new Set(baselineReviews.map(r => r.reviewId));
+  // 建立基线索引：ID 集合 + fallback 键集合，兼容旧基线缺少 ID 的情况
+  const baselineBookmarkIds = new Set();
+  const baselineBookmarkFallbacks = new Set();
+  for (const b of baselineBookmarks) {
+    const idKey = bookmarkIdKey(b);
+    if (idKey) baselineBookmarkIds.add(idKey);
+    baselineBookmarkFallbacks.add(bookmarkFallbackKey(b));
+  }
 
-  const newBookmarks = currentBookmarks.filter(b => !baselineBookmarkIds.has(b.bookmarkId));
-  const newReviews = currentReviews.filter(r => !baselineReviewIds.has(r.reviewId));
+  const baselineReviewIds = new Set();
+  const baselineReviewFallbacks = new Set();
+  for (const r of baselineReviews) {
+    const idKey = reviewIdKey(r);
+    if (idKey) baselineReviewIds.add(idKey);
+    baselineReviewFallbacks.add(reviewFallbackKey(r));
+  }
+
+  // 匹配：ID 优先，fallback 键兜底（即使 current 有 ID，也同时用 fallback 查 baseline）
+  const newBookmarks = currentBookmarks.filter(b => {
+    const idKey = bookmarkIdKey(b);
+    if (idKey && baselineBookmarkIds.has(idKey)) return false;
+    if (baselineBookmarkFallbacks.has(bookmarkFallbackKey(b))) return false;
+    return true;
+  });
+
+  const newReviews = currentReviews.filter(r => {
+    const idKey = reviewIdKey(r);
+    if (idKey && baselineReviewIds.has(idKey)) return false;
+    if (baselineReviewFallbacks.has(reviewFallbackKey(r))) return false;
+    return true;
+  });
 
   const progressFrom = baseline.progress || 0;
   const progressTo = current.progress || 0;
