@@ -118,7 +118,8 @@ API 调用规范（来自 weread-skills）：
 6. **插图生成**：对每本文学/小说类有变化的书，判断重述部分是否适合配木刻版画插图。如需配图，按附录 B 的规范调用魔搭 Modelscope API 生成，保存到 `{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/`，在 markdown 中嵌入 wikilink，ASCII 结构图保留在插图下方作为 fallback。工具书/非虚构/哲学类跳过插图，仅用 ASCII。API 调用失败时静默回退到纯 ASCII。
 7. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
 8. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
-   - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
+   - 如果当日文件不存在 → 直接创建
+   - 如果当日文件已存在 → 递增尾缀：`YYYY-MM-DD-2.md`、`YYYY-MM-DD-3.md`…（检查已有文件，取最大尾缀 +1）
 
 ### 第 6 步：Insight 沉淀
 
