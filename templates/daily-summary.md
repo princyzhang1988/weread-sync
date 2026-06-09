@@ -49,7 +49,7 @@
 1. **判断是否需要插图**：有结构化信息（人物关系、场景冲突、论证结构）且内容不极简时生成。内容太少时跳过，只用 ASCII。
 2. **图像风格**：木刻版画（woodcut print）——黑白、高对比、刀刻线条、木纹肌理，1930 年代新兴木刻运动风格。纯黑白无灰阶。
 3. **内容要求**：贴合原著的时代背景和人物设定。人物年龄、服饰、场景必须与原著一致。禁止在图中出现任何文字、中文、印章、签名。
-4. **存放路径**：`{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/YYYY-MM-DD-<类型>.png`
+4. **存放路径**：`{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/YYYY-MM-DD-<类型>.png`（同日多次同步时，图片名跟随笔记名加尾缀 `YYYY-MM-DD-N-<类型>.png`）
 5. **嵌入方式**：`![[知识库/20.Areas/阅读/books/<书名>/weread/diagrams/YYYY-MM-DD-<类型>.png]]`
 6. **API**：魔搭 Modelscope `Qwen/Qwen-Image`，异步模式。Prompt 不超过 2000 字符。详见 SKILL.md 附录 B。
 7. **失败回退**：API 生成失败时，仅保留 ASCII 结构图。
