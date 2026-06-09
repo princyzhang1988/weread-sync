@@ -113,6 +113,12 @@ async function main() {
         })),
       };
 
+      // Warn if book has reviews/progress but zero bookmarks (likely phone not synced to cloud yet)
+      const hasActivity = bookData.progress > 0 || bookData.totalReadTime > 0 || bookData.reviews.length > 0;
+      if (bookData.bookmarks.length === 0 && hasActivity) {
+        console.log('⚠️ 有阅读活动但无划线数据——手机端可能尚未同步到云端，建议稍后重新初始化');
+      }
+
       // Save BookData JSON for future use
       writeFileSync(dataFile, JSON.stringify(bookData, null, 2));
 
