@@ -115,9 +115,10 @@ API 调用规范（来自 weread-skills）：
 3. **检测章节边界**：对每本有变化的书，检查 `chapterChange.from.chapterUid` 和 `chapterChange.to.chapterUid`。如果不同，说明跨过了章节边界 → 生成「📌 章节回顾」
 4. **检测内容边界**：分析新增划线/想法的内容，判断是否出现场景收束、论证段落结束、章节分水岭等自然边界 → 有则生成「🔜 翻页之前」
 5. **检测阅读阶段**：根据 `progressChange.to` 判断阶段（0-5% 开卷 / 5-30% 渐入 / 30-70% 沉浸 / 70-99% 收束 / 100% 读完），按对应阶段选择掩卷之后的问题侧重
-6. **插图生成**：对每本文学/小说类有变化的书，判断重述部分是否适合配木刻版画插图。如需配图，按附录 B 的规范调用魔搭 Modelscope API 生成，保存到 `{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/`，在 markdown 中嵌入 wikilink，ASCII 结构图保留在插图下方作为 fallback。工具书/非虚构/哲学类跳过插图，仅用 ASCII。API 调用失败时静默回退到纯 ASCII。
-7. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
-8. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
+6. **日记时间范围**：对每本有变化的书，检查标题是否含「日记」「日志」「diary」「journal」（或分类为人物传记且标题含年份范围）。如是日记类，从 BookData 章节标题中提取纯年份（正则 `^\d{4}年?$`），取最早和最晚年份 → 在重述 prose 段落后附加 `**日记跨度**：YYYY年—YYYY年（N年）`。无法提取时静默跳过。
+7. **插图生成**：对每本文学/小说类有变化的书，判断重述部分是否适合配木刻版画插图。如需配图，按附录 B 的规范调用魔搭 Modelscope API 生成，保存到 `{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/`，在 markdown 中嵌入 wikilink，ASCII 结构图保留在插图下方作为 fallback。工具书/非虚构/哲学类跳过插图，仅用 ASCII。API 调用失败时静默回退到纯 ASCII。
+8. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
+9. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件不存在 → 直接创建
    - 如果当日文件已存在 → 递增尾缀：`YYYY-MM-DD-2.md`、`YYYY-MM-DD-3.md`…（检查已有文件，取最大尾缀 +1）
 
