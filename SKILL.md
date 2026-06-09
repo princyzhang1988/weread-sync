@@ -115,8 +115,9 @@ API 调用规范（来自 weread-skills）：
 3. **检测章节边界**：对每本有变化的书，检查 `chapterChange.from.chapterUid` 和 `chapterChange.to.chapterUid`。如果不同，说明跨过了章节边界 → 生成「📌 章节回顾」
 4. **检测内容边界**：分析新增划线/想法的内容，判断是否出现场景收束、论证段落结束、章节分水岭等自然边界 → 有则生成「🔜 翻页之前」
 5. **检测阅读阶段**：根据 `progressChange.to` 判断阶段（0-5% 开卷 / 5-30% 渐入 / 30-70% 沉浸 / 70-99% 收束 / 100% 读完），按对应阶段选择掩卷之后的问题侧重
-6. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
-7. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
+6. **插图生成**：对每本文学/小说类有变化的书，判断重述部分是否适合配木刻版画插图。如需配图，按附录 B 的规范调用魔搭 Modelscope API 生成，保存到 `{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/`，在 markdown 中嵌入 wikilink，ASCII 结构图保留在插图下方作为 fallback。工具书/非虚构/哲学类跳过插图，仅用 ASCII。API 调用失败时静默回退到纯 ASCII。
+7. 按模板要求生成完整小结 markdown，严格遵守各区块的风格规则，始终包含「✎ 今日随笔」留白区
+8. 将小结写入 `{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
    - 如果当日文件已存在（手动多次触发），追加内容而非覆盖，用 `---` 分隔符分隔
 
 ### 第 6 步：Insight 沉淀
@@ -280,3 +281,143 @@ node {SKILL_DIR}/scripts/bulk-first-sync.mjs
 
 从下次同步开始，将自动识别新增的划线和进度变化，生成每日读书小结。
 ```
+
+---
+
+## 附录 B：木刻版画插图生成（魔搭 Modelscope）
+
+使用魔搭 Modelscope 的 Qwen/Qwen-Image 模型，通过异步 API 生成木刻版画风格插图。免费额度：2000 次/天。
+
+### B.1 前置条件
+
+- `MODELSCOPE_API_KEY` 已设置（格式 `ms-xxxxxxxx`）
+- 魔搭账号已绑定阿里云账号
+
+### B.2 API 调用流程
+
+三步：提交任务 → 轮询状态 → 下载图片。
+
+**关键点**：
+- 提交时必带 `X-ModelScope-Async-Mode: true`
+- 轮询时必带 `X-ModelScope-Task-Type: image_generation`（不带则返回 "task not found"）
+- 状态字段名是 `task_status`（不是 `status`）
+- Prompt 不超过 2000 字符
+- 图片尺寸固定 `1024x576`（16:9）
+
+**Python 脚本模板**（内联在 bash 中执行）：
+
+```bash
+export MODELSCOPE_API_KEY="ms-xxxxxxxx"
+
+python3 << 'PYEOF'
+import requests, time, json, sys
+
+API_KEY = "ms-xxxxxxxx"
+
+prompt = """[木刻 prompt，按 B.3 模板组装]"""
+
+headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "Content-Type": "application/json",
+    "X-ModelScope-Async-Mode": "true"
+}
+
+resp = requests.post(
+    "https://api-inference.modelscope.cn/v1/images/generations",
+    headers=headers,
+    json={"model": "Qwen/Qwen-Image", "prompt": prompt, "n": 1, "size": "1024x576"},
+    timeout=30
+)
+
+if resp.status_code != 200:
+    print(f"❌ Submit failed: {resp.status_code}")
+    print(resp.text[:500])
+    sys.exit(1)
+
+task_id = resp.json().get("task_id")
+print(f"📋 Task: {task_id}")
+
+poll_headers = {
+    "Authorization": f"Bearer {API_KEY}",
+    "X-ModelScope-Task-Type": "image_generation"
+}
+
+for i in range(15):
+    time.sleep(3)
+    r = requests.get(
+        f"https://api-inference.modelscope.cn/v1/tasks/{task_id}",
+        headers=poll_headers, timeout=30
+    )
+    if r.status_code != 200:
+        continue
+    result = r.json()
+    ts = result.get("task_status")
+    print(f"⏳ {i+1}/15: {ts}")
+    if ts == "SUCCEED":
+        url = result["output_images"][0]
+        print(f"✅ {url}")
+        img = requests.get(url, timeout=60).content
+        out_path = "[图片保存路径]"
+        with open(out_path, "wb") as f:
+            f.write(img)
+        print(f"📥 {out_path} ({len(img)/1024:.0f} KB)")
+        sys.exit(0)
+    elif ts == "FAILED":
+        print(f"❌ FAILED")
+        sys.exit(1)
+
+print("❌ Timeout")
+PYEOF
+```
+
+### B.3 Prompt 组装规范
+
+按以下 5 段顺序组装 prompt，每段必含。总长度控制在 2000 字符以内。
+
+```
+1. 媒介+风格：
+A woodcut print (木刻版画), black and white, high contrast, bold carved lines, visible wood grain texture. 1930s expressionist woodblock style.
+
+2. 场景锚定：
+Scene from [作者]'s "[书名]", [时代] [地点].
+
+3. 具体画面（从 diff/prose 中提取）：
+- 主角：[年龄]岁，[外貌特征——sharp features/high cheekbones/intense eyes 等具体描述]，[姿态——stands alone by window/watches in silence 等]，[衣着——high-collared student coat/practical coat 等，与年龄匹配]
+- 配角群：[年龄——必须标注 YOUNG/students/early 20s，大写强调]，[动作——heated debate/pounding table 等]，[衣着]
+- 空间：[房间类型——student apartment/parlour 等]，[光线——pale winter light/candle 等]，[关键物品]
+- 窗外：[季节+城市地标——Petersburg winter rooftops 等]
+- 构图：[主角在光中 / 配角在阴影中 / 对角线逆光 等]
+
+4. 硬约束（一字不改）：
+Requirements: [年龄要求如 characters YOUNG 19-22 student types], Russian/European features NOT Chinese, woodcut aesthetic bold carved strokes pure black and white no gray, NO text NO Chinese characters NO seals NO signatures, Aspect ratio 16:9.
+
+5. 情感内核（一句话）：
+[场景的情绪核心——如 a lonely observer trapped between silence and pressure to take sides]
+```
+
+### B.4 插图生成决策表
+
+| 书类型 | 是否生成插图 | 插图类型 | 非文学替代方案 |
+|--------|-------------|----------|---------------|
+| 文学/小说 | ✅ 是 | 木刻场景插画 | - |
+| 工具书/非虚构 | ❌ 否 | - | 仅 ASCII 概念图 |
+| 哲学/思想 | ❌ 否 | - | 仅 ASCII 论证链 |
+
+### B.5 错误处理
+
+| 错误 | 处理方式 |
+|------|---------|
+| Prompt 超 2000 字符 | 精简第 3、5 段，保留第 1、2、4 段不变 |
+| API 返回 400/500 | 重试一次，仍失败则静默回退到纯 ASCII |
+| 轮询超时（45 秒后仍 PROCESSING） | 放弃该图，回退到 ASCII |
+| 图片下载失败 | 回退到 ASCII |
+| 任务状态 FAILED | 记录错误，回退到 ASCII |
+
+**核心原则**：插图是锦上添花，不是必需。任何失败都不应阻塞小结生成。
+
+### B.6 图片路径约定
+
+- 目录：`{VAULT}/知识库/20.Areas/阅读/books/<书名>/weread/diagrams/`
+- 文件名：`YYYY-MM-DD-<简短描述>.png`（如 `2026-06-09-人物关系.png`、`2026-06-09-初见.png`）
+- 目录不存在时先创建
+- 在 markdown 中用 vault 相对路径 wikilink 嵌入：`![[知识库/20.Areas/阅读/books/<书名>/weread/diagrams/YYYY-MM-DD-<描述>.png]]`
