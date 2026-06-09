@@ -30,6 +30,7 @@ VAULT_ROOT = "知识太空舱" 的绝对路径
 BASELINE_DIR = "{VAULT_ROOT}/知识库/20.Areas/阅读/books/<书名>/weread/"
 SUMMARY_DIR  = "{VAULT_ROOT}/知识库/20.Areas/阅读/读书笔记/"
 SKILL_DIR = 本 skill 的安装目录
+DB_PATH     = "~/.weread-sync/state.db"  （SQLite 状态库，不在 vault 内）
 ```
 
 注意：`VAULT_ROOT` 默认为当前用户的 Obsidian vault 路径。在 SKILL.md 被 LLM 加载执行时，应从会话上下文中自动获取 vault 路径。如果无法自动获取，使用以下默认路径：
@@ -53,10 +54,32 @@ SKILL_DIR = 本 skill 的安装目录
 
 ### 第 0 步：前置检查
 
-1. 确认 `WEREAD_API_KEY` 环境变量已设置。若未设置，提示用户：
-   > 请先设置微信读书 API Key：`export WEREAD_API_KEY=<你的apikey>`
-   > 在微信读书 App → 设置 → 技能管理 中申请。
-2. 确认 Obsidian vault 路径可访问。
+1. **检查 `WEREAD_API_KEY`（必须）**：
+   - 已设置 → 继续
+   - 未设置 → 显示以下指引并**终止**：
+   
+   > ⚠️ 未检测到 WEREAD_API_KEY 环境变量。
+   > 
+   > **获取方式**：
+   > 1. 打开微信读书 App → 我 → 设置 → 技能管理
+   > 2. 申请 API Key（格式 `wrk-xxxxxxxx`）
+   > 3. 设置环境变量：`export WEREAD_API_KEY=<你的key>`
+   > 
+   > 设置后请重新执行 `/weread-sync`。
+
+2. **检查 `MODELSCOPE_API_KEY`（可选）**：
+   - 已设置 → 按附录 B 生成木刻插图
+   - 未设置 → 告知用户，继续同步（不阻塞）：
+   
+   > 💡 未检测到 MODELSCOPE_API_KEY，插图生成将跳过。
+   > 如需 AI 木刻版画插图，请申请并配置：`export MODELSCOPE_API_KEY=<你的key>`
+   > 详见：https://modelscope.cn → API Token。
+
+3. **检查数据库**：
+   - `~/.weread-sync/state.db` 不存在 → 执行 `node {SKILL_DIR}/scripts/db.mjs init` 建表
+   - 已存在 → 继续
+
+4. 确认 Obsidian vault 路径可访问。
 
 ### 第 1 步：检测是否需要初始化
 
@@ -103,7 +126,7 @@ SKILL_DIR = 本 skill 的安装目录
      - **注意**：`/review/list/mine` 返回 `reviews[].review.reviewId`（嵌套在 `review` 对象内），组装 BookData 时必须提取到顶层，保留 `reviewId` 字段
 4. **对每本书组装 BookData JSON**，写入临时文件 `/tmp/weread-sync/<bookId>.json`
    - **关键字段**：每条 bookmark 必须保留 `bookmarkId`，每条 review 必须保留 `reviewId`——这是 diff 比对的唯一标识，丢失会导致所有旧笔记被误判为新增
-5. **如果某本书没有基线文件**：这是新书，直接用当前数据生成基线（调 baseline.mjs generate），不参与 diff
+5. **如果某本书 DB 中无状态**（新书）：直接用当前数据建立基线（调 `baseline.mjs generate` 生成 baseline.md，调 `db.mjs update-state` 写入 DB），不参与 diff
 
 API 调用规范（来自 weread-skills）：
 - 统一入口：`POST https://i.weread.qq.com/api/agent/gateway`
@@ -113,11 +136,12 @@ API 调用规范（来自 weread-skills）：
 
 ### 第 4 步：计算 Diff
 
-对每本已有基线且拉取了新数据的书：
+对每本 DB 中已有状态且拉取了新数据的书：
 
-1. 用 `node {SKILL_DIR}/scripts/baseline.mjs extract <baseline.md路径>` 提取基线 JSON → 写入 `/tmp/weread-sync/<bookId>-baseline.json`
-2. 用 `node {SKILL_DIR}/scripts/diff.mjs /tmp/weread-sync/<bookId>-baseline.json /tmp/weread-sync/<bookId>.json` 计算 diff
-3. 收集所有书的 DiffResult
+1. 用 `node {SKILL_DIR}/scripts/diff.mjs <bookId> /tmp/weread-sync/<bookId>.json` 计算 diff
+   - diff.mjs 从 `~/.weread-sync/state.db` 读取该书的基线状态（进度、已知 bookmark/review ID 集合）
+   - 与当前 BookData JSON 比对，输出 DiffResult
+2. 收集所有书的 DiffResult
 
 ### 第 5 步：生成每日小结
 
@@ -143,15 +167,19 @@ API 调用规范（来自 weread-skills）：
 4. 无跨笔记连接时不生成 🔗 连接区
 5. 不创建独立 insight 文件、不维护 INDEX——Obsidian 反向链接自动聚合
 
-### 第 7 步：更新基线文件
+### 第 7 步：更新基线文件 & DB 状态
 
 对每本有变化的书：
 
-1. 用最新 BookData JSON 生成新的 baseline.md：
+1. 用最新 BookData JSON 更新 baseline.md（人类可读区 + frontmatter）：
    ```bash
    node {SKILL_DIR}/scripts/baseline.mjs generate /tmp/weread-sync/<bookId>.json {VAULT_ROOT}/知识库/20.Areas/阅读/books/<书名>/weread/baseline.md
    ```
-2. 如果书的 `weread/` 目录不存在，先创建
+2. 用最新 BookData JSON 更新 DB 状态（bookmarks / reviews / progress）：
+   ```bash
+   node {SKILL_DIR}/scripts/db.mjs update-state /tmp/weread-sync/<bookId>.json
+   ```
+3. 如果书的 `weread/` 目录不存在，先创建
 
 ### 第 8 步：报告结果
 
@@ -187,15 +215,18 @@ API 调用规范（来自 weread-skills）：
 ### 错误处理
 
 - **API 调用失败**：重试一次，若仍失败，跳过该书并告知用户
+- **DB 操作失败**：非致命，diff 会将没有状态的书当作首次同步（所有内容为新增）
 - **基线文件损坏**：提示用户"《书名》基线文件格式异常，将重新创建基线"，用当前数据覆盖
 - **无新数据**：正常结束，不生成小结
 - **WEREAD_API_KEY 未设置**：终止并提示配置
+- **MODELSCOPE_API_KEY 未设置**：不终止，跳过插图生成
 
 ## 引用文件
 
 生成小结时附上文件路径，方便用户点击跳转：
 - 小结文件：`知识库/20.Areas/阅读/读书笔记/YYYY-MM-DD.md`
 - 基线文件：`知识库/20.Areas/阅读/books/<书名>/weread/baseline.md`
+- 状态数据库：`~/.weread-sync/state.db`
 
 ---
 

@@ -1,0 +1,12 @@
+{
+  "name": "weread-sync",
+  "version": "0.3.0",
+  "description": "微信读书数据同步到 Obsidian",
+  "type": "module",
+  "scripts": {
+    "init": "node scripts/db.mjs init"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  }
+}

@@ -196,20 +196,6 @@ function generateBaseline(data) {
     lines.push('## 💬 我的想法', '', '*暂无想法*', '');
   }
 
-  // ═══ 分隔 ═══
-  lines.push('---', '');
-
-  // ═══ 机器可读区 ═══
-  lines.push('## 🤖 同步基线（机器可读）', '');
-  lines.push('<details>');
-  lines.push('<summary>展开</summary>');
-  lines.push('');
-  lines.push('```json');
-  lines.push(JSON.stringify(data, null, 2));
-  lines.push('```');
-  lines.push('');
-  lines.push('</details>');
-
   return lines.join('\n');
 }
 
@@ -218,11 +204,7 @@ const command = process.argv[2];
 const arg1 = process.argv[3];
 const arg2 = process.argv[4];
 
-if (command === 'extract' && arg1) {
-  const md = readFileSync(arg1, 'utf-8');
-  const data = extractBaseline(md);
-  console.log(JSON.stringify(data, null, 2));
-} else if (command === 'generate' && arg1) {
+if (command === 'generate' && arg1) {
   const data = JSON.parse(readFileSync(arg1, 'utf-8'));
   const md = generateBaseline(data);
   if (arg2) {
@@ -233,7 +215,6 @@ if (command === 'extract' && arg1) {
   }
 } else {
   console.error('Usage:');
-  console.error('  node baseline.mjs extract <baseline.md>');
   console.error('  node baseline.mjs generate <data.json> [output.md]');
   process.exit(1);
 }

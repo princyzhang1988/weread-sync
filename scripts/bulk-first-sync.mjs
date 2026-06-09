@@ -36,6 +36,13 @@ function sanitizeFilename(title) {
 async function main() {
   mkdirSync(TMP_DIR, { recursive: true });
 
+  // Ensure DB is initialized
+  try {
+    execSync(`node "${SKILL_DIR}/scripts/db.mjs" init`, { encoding: 'utf-8', timeout: 5000 });
+  } catch {
+    // Non-fatal: diff will create tables on first use
+  }
+
   // Step 1: Get shelf
   console.log('📚 Fetching shelf...');
   const shelf = apiCall('/shelf/sync');
@@ -131,6 +138,17 @@ async function main() {
           encoding: 'utf-8',
           timeout: 5000,
         });
+
+        // Write state to DB for diff tracking
+        try {
+          execSync(`node "${SKILL_DIR}/scripts/db.mjs" update-state "${dataFile}"`, {
+            encoding: 'utf-8',
+            timeout: 5000,
+          });
+        } catch {
+          // DB write failure is non-fatal — diff will treat as first sync next time
+        }
+
         console.log('✅');
       } catch (e) {
         console.log(`⚠️ baseline gen failed: ${e.message?.slice(0, 60)}`);
